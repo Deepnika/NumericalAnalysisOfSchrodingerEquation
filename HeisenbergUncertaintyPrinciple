@@ -1,1 +1,50 @@
-#Code will be added
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+
+
+im = complex(0.0, 1.0)
+X = np.linspace(0, 100, 1001)
+K = np.linspace(0, 100, 1001)
+hbar2 = 0.076199682
+k0 = 0.2
+x0 = 50.00
+
+
+psi1 = np.zeros(len(X), complex)
+psi2 = np.zeros(len(X), float)
+
+for i in range(len(X)):
+  psi1[i] = np.exp(im*k0*X[i]).real + im*np.exp(im*k0*X[i]).imag
+
+print("Exponential Wave-function")
+plt.plot(X, psi1.real)
+plt.title('Real part of Exp(ikx)')
+plt.show()
+plt.plot(X, abs(psi1)**2)
+plt.title('Probability of finding a particle at a given position(x)')
+plt.show()
+ftpsi1 = np.fft.fft(psi1)
+psi2 = ftpsi1
+plt.plot(X, ftpsi1.real)
+plt.title('Fourier Transform of Exp(ikx)')
+plt.show()
+plt.plot(X, abs(ftpsi1)**2)
+plt.title('Probability of finding a particle with a given momentum(hk/2pi): (Not Normalized)')
+plt.show()
+print("Delta Wave-Function")
+plt.plot(X, psi2.real)
+plt.title('Delta(x)')
+plt.show()
+plt.plot(X, abs(psi2)**2)
+plt.title('Probability of finding a particle at a given position(x): (Not Normalized)')
+plt.show()
+ftpsi2 = np.fft.fft(psi2)
+ftpsi2 = ftpsi2/1000.0
+plt.plot(X, ftpsi2.real)
+plt.xlim(0.2, 100)
+plt.title('Fourier Transform of Delta(x)')
+plt.show()
+plt.plot(X, abs(ftpsi2)**2)
+plt.title('Probability of finding a particle with a given momentum(hk/2pi)')
+plt.show()
