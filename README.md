@@ -1,1 +1,1 @@
-# Numerical-Analysis-of-Schrodinger-Equation
+# Numerical Analysis of Schrodinger's Equation
