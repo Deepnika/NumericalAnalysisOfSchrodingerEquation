@@ -1,0 +1,189 @@
+import numpy as np
+import scipy
+from scipy import integrate
+from scipy.optimize import newton
+import matplotlib.pyplot as plt
+
+
+def SchrodingerEquation(y, r, V, E):
+    psi, phi = y
+    dphidx = [phi, (V-E)*psi]
+    return np.asarray(dphidx)
+
+
+def SchrodingerDerivative(y, r, L, E):
+    du2 = y[0]*((L*(L+1))/(r**2)-2.0/r-E )
+    return [y[1], du2]
+
+
+def RK4(f, psi0, x, V, E):
+    n = len(x)
+    psi = np.array([psi0]*n)
+    for i in range(n-1):
+        h = x[i+1] - x[i]
+        k1 = h*f(psi[i], x[i], V[i], E)
+        k2 = h*f(psi[i] + 0.5*k1, x[i] + 0.5*h, V[i], E)
+        k3 = h*f(psi[i] + 0.5*k2, x[i] + 0.5*h, V[i], E)
+        k4 = h*f(psi[i] + k3, x[i+1], V[i], E)
+        psi[i+1] = psi[i] + (k1 + 2.0*(k2 + k3) + k4)/6.0
+    return psi
+
+
+def shoot(func, psi0, x, V, EnergyArray):
+    psi_rightb = []
+    for EN in EnergyArray:
+        psi = RK4(func, psi0, x, V, EN)
+        psi_rightb.append(psi[len(psi)-1][0])
+    return np.asarray(psi_rightb)
+
+
+def shoot1(E, func, psi0, x, V):
+    psi = RK4(func, psi0, x, V, E)
+    return psi[len(psi)-1][0]
+
+
+def shoot_ode(E, psi_init, x, L):
+    sol = integrate.odeint(SchrodingerDerivative, psi_init, x, args=(L, E))
+    return sol[len(sol)-1][0]
+
+
+def findZeros(RightBoundValues):
+    return np.where(np.diff(np.signbit(RightBoundValues)))[0]       # Indicates at which position the 
+                                                                    # RightBoundValues change their sign.
+
+
+def optimizeEnergy(func, psi0, x, V, EnergyArray):                  # Finds out the optimum energy.
+    ShootTry = shoot(func, psi0, x, V, EnergyArray)                 # Discards the useless energies that do not converge.
+    crossings = findZeros(ShootTry)
+    EnergyList = []
+    for cross in crossings :
+        EnergyList.append(newton(shoot1, EnergyArray[cross], args=(func, psi0, x, V)))
+    return np.asarray(EnergyList)
+
+
+def normalize(output_wavefunc):                                     # Normalizes the wavefunction
+    normal = max(output_wavefunc)                                   # All the values are divided by the maximum value.
+    return output_wavefunc*(1/normal)
+
+
+def shoot_potwell(psiInitial, h):
+    xArrayIPW = np.arange(0.0, 1.0+h, h)
+    Vipw = np.zeros(len(xArrayIPW))
+    EnergyArray = np.arange(1.0, 100.0, 5.0)
+    EigenE = optimizeEnergy(SchrodingerEquation, psiInitial, xArrayIPW, Vipw, EnergyArray)
+    ipw_out_list = []
+    for EE in EigenE :
+        out = RK4(SchrodingerEquation, psiInitial, xArrayIPW, Vipw, EE)
+        ipw_out_list.append(normalize(out[:, 0]))
+    OutputArray = np.asarray(ipw_out_list)
+    
+    # Analytical solution for IPW
+    k = np.arange(1.0, 4.0, 1.0)
+    ipw_sol_ana = []
+    for kk in k:
+        ipw_sol_ana.append(np.sin(kk*np.pi*xArrayIPW))
+    ipw_sol_ana_arr = np.asarray(ipw_sol_ana)
+    return xArrayIPW, OutputArray, ipw_sol_ana_arr
+
+
+def shoot_QuantumHarmonicOscillator (psiInitial, h):
+    xArrayQHO = np.arange(-5.0, 5.0+h, h)
+    V_qho = xArrayQHO**2
+    EnergyArray = np.arange(1.0, 15.0, 1.0)
+    EigenE = optimizeEnergy (SchrodingerEquation, psiInitial, xArrayQHO, V_qho, EnergyArray)
+    qho_out_list = []
+    for EN in EigenE :
+        out = RK4(SchrodingerEquation, psiInitial, xArrayQHO, V_qho, EN)
+        qho_out_list.append(normalize(out[:, 0]))
+    qho_out_arr = np.asarray(qho_out_list)
+    
+    # Analytical solution for QHO
+    qho_sol_ana_0 = np.exp(-(xArrayQHO)**2/2)
+    qho_sol_ana_1 = np.sqrt (2.0)*(xArrayQHO)* np.exp(-(xArrayQHO)**2/2)*( -1)
+    qho_sol_ana_2 = (1.0/np.sqrt(2.0))*(2.0*(xArrayQHO)**2 - 1.0)*np.exp(-(xArrayQHO)**2/2)
+    qho_sol_list = []
+    qho_sol_list.append(qho_sol_ana_0)
+    qho_sol_list.append(qho_sol_ana_1)
+    qho_sol_list.append(qho_sol_ana_2)
+    return xArrayQHO, qho_out_arr, np.asarray(qho_sol_list)
+
+
+
+
+def shoot_hydrogen (psiInitial, h, L):
+    xArrayHA = np.arange(0.0001, 35.0+h, h)
+    EnergyArray = np.arange (-1.0, 0.0, 0.001)
+    rightb = []
+    for EE in EnergyArray:
+        psi = integrate.odeint(SchrodingerDerivative, psiInitial, xArrayHA, args=(L, EE))[:, 0]
+        rightb.append(psi[len(psi)-1])
+    rightb_arr = np.asarray(rightb)
+    crossings = findZeros(rightb_arr)
+    energy_l = []
+    for cross in crossings :
+        energy_l.append(newton(shoot_ode, EnergyArray[cross], args=(psiInitial, xArrayHA, L)))
+    psi_out = []
+    for En in energy_l :
+        psi_out.append(integrate.odeint(SchrodingerDerivative, psiInitial, xArrayHA, args=(L, En))[:, 0])
+    return xArrayHA, np.asarray(psi_out)
+
+
+
+def HYDRO_ana(x, N, L):
+    # analytical solution hydrogen for N =1
+    if(((N-L-1) == 0) and (L == 0)):
+        return x* np . exp (-x)
+    elif(((N -L -1) == 1) and (L == 0)):
+        return(np.sqrt(2.)*(- x + 2.)*np.exp(-x/2.)/4.)*x
+    elif(((N -L -1) == 2)):
+        return(2.*np.sqrt(3.)*(2.*x**2./9. - 2.*x + 3.)*np.exp(-x/3.)/27.)*x
+    elif(((N -L -1) == 0) and (L == 1)):
+        return(np.sqrt(6.)*x*np.exp(-x/2.)/12.)*x
+    else :
+        print(" No analytic wave function found. Please try again.")
+        print(" Output will be zero array.")
+        return np.zeros(len(x))
+
+
+
+def PlotWF(TitleString, x_arr, num_arr, ana_arr, axis_list):
+    plt.figure(figsize = (8,8))
+    plt.plot(x_arr, num_arr, linewidth = 6, label = 'Solution by Shooting Method')
+    plt.plot(x_arr, normalize(ana_arr), label = 'Analytical Solution')
+    plt.axis(axis_list)
+    plt.title(TitleString)
+    plt.legend()
+    plt.show()
+
+
+
+    
+psi_0 = 0.0                                                 # Initial conditions for Infinite Potential Well and Harmonic Oscillator.
+phi_0 = 1.0
+h = 1.0/200.0                                               # stepsize for range arrays
+psiInitial = np.asarray([psi_0, phi_0])                                        
+ipw_x , ipw_num , ipw_ana = shoot_potwell(psiInitial, h)
+qho_x , qho_num , qho_ana = shoot_QuantumHarmonicOscillator(psiInitial, h)
+hydro_x , hydro_num = shoot_hydrogen(psiInitial, h, 0)
+hydro_x2p , hydro_num2p = shoot_hydrogen(psiInitial, h, 1)
+hydro_ana1s = HYDRO_ana(hydro_x, 1, 0)
+hydro_ana2s = HYDRO_ana(hydro_x, 2, 0)
+hydro_ana3s = HYDRO_ana(hydro_x, 3, 0)
+
+
+
+# print hydro_num
+hydro_ana2p = HYDRO_ana ( hydro_x , 2, 1)
+print (" IPW shooting ")
+PlotWF( " Infinte Potential Well -- Ground State " ,ipw_x , ipw_num [0 , :] , ipw_ana [0 , :] , [ -0.1 , 1.1 , -0.2 , 1.2])
+PlotWF( " Infinte Potential Well -- First Excited State " ,ipw_x , ipw_num [1 , :] , ipw_ana [1 , :] , [ -0.1 , 1.1 , -1.2 , 1.2])
+PlotWF( " Infinte Potential Well -- Second Excited State " ,ipw_x , ipw_num [2 , :] , ipw_ana [2 , :] , [ -0.1 , 1.1 , -1.2 , 1.2])
+print (" QHO shooting ")
+PlotWF( " Quantum Hamonic Oscillator -- Ground State " ,qho_x , qho_num [0 , :] , qho_ana [0 , :] , [ -5.2 , 5.2 , -1.2 , 1.2])
+PlotWF( " Quantum Hamonic Oscillator -- First Excited State " ,qho_x , qho_num [1 , :] , qho_ana [1 , :] , [ -5.2 , 5.2 , -1.2 , 1.2])
+PlotWF( " Quantum Hamonic Oscillator -- Second Excited State " ,qho_x , qho_num [2 , :] , qho_ana [2 , :] , [ -5.2 , 5.2 , -1.2 , 1.2])
+print (" Hydrogen Atom shooting ")
+PlotWF( " Hydrogen Atom -- 1s State " ,hydro_x , normalize(hydro_num [0 , :]) , hydro_ana1s , [ -0.1 , 30. , -0.1 , 1.2])
+PlotWF( " Hydrogen Atom -- 2s State " ,hydro_x , normalize(hydro_num [1 , :]) , hydro_ana2s , [ -0.1 , 30. , -2.2 , 1.2])
+PlotWF( " Hydrogen Atom -- 2p State " ,hydro_x2p , normalize(hydro_num2p[0 , :]) , hydro_ana2p , [ -0.1 , 30. , -0.1 , 1.2])
+PlotWF( " Hydrogen Atom -- 3s State " ,hydro_x , normalize(hydro_num[2 , :]) , hydro_ana3s , [ -0.1 , 30. , -1.2 , 1.2])
